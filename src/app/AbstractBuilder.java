@@ -37,43 +37,42 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
     public String entrySeparator = ", ";
 
     /**
-     * Target class
+     * Cache
      */
-    final Class<VALUE> clazz;
-    /**
-     * Field names
-     */
-    final NAMES[] names;
-    /**
-     * Field refrections
-     */
-    final Field[] fields;
+    final Cache<VALUE, NAMES> cache;
     /**
      * Field values
      */
     final Object[] values;
 
     /**
-     * Cache
+     * Caches
      */
-    private static final Map<Class<?>, Cache> caches = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Cache<?, Enum<?>>> caches = new ConcurrentHashMap<>();
 
     /**
      * Cached items
+     * 
+     * @param <T> Value type
+     * @param <U> Names type
      */
-    private static class Cache {
+    private static class Cache<T, U extends Enum<?>> {
         /**
          * Target class
          */
-        private Class<?> clazz;
+        private Class<T> clazz;
         /**
          * Field names
          */
-        private Enum<?>[] names;
+        private U[] names;
         /**
-         * Field refrections
+         * Field reflections
          */
         private Field[] fields;
+        /**
+         * constructor
+         */
+        private Constructor<T> constructor;
     }
 
     /**
@@ -81,11 +80,11 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
      */
     @SuppressWarnings("unchecked")
     public AbstractBuilder() {
-        Cache cache = caches.computeIfAbsent(getClass(), key -> {
+        cache = (Cache<VALUE, NAMES>) caches.computeIfAbsent(getClass(), key -> {
             Type[] types = ((ParameterizedType) key.getGenericSuperclass()).getActualTypeArguments();
-            Cache c = new Cache();
-            c.clazz = (Class<?>) types[0];
-            c.names = ((Class<Enum<?>>) types[2]).getEnumConstants();
+            Cache<VALUE, NAMES> c = new Cache<>();
+            c.clazz = (Class<VALUE>) types[0];
+            c.names = ((Class<NAMES>) types[2]).getEnumConstants();
             c.fields = Stream.of(c.names).map(i -> {
                 try {
                     return c.clazz.getField(i.name());
@@ -93,12 +92,14 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
                     throw new InternalError(e);
                 }
             }).toArray(Field[]::new);
-            return c;
+            try {
+                c.constructor = (Constructor<VALUE>) c.clazz.getConstructor(Stream.of(c.fields).map(Field::getType).toArray(Class[]::new));
+            } catch (NoSuchMethodException | SecurityException e) {
+                throw new InternalError(e);
+            }
+            return (Cache<?, Enum<?>>) c;
         });
-        clazz = (Class<VALUE>) cache.clazz;
-        names = (NAMES[]) cache.names;
-        fields = cache.fields;
-        values = Stream.of(fields).map(field -> field.getType() == Optional.class ? Optional.empty() : null).toArray(Object[]::new);
+        values = Stream.of(cache.fields).map(field -> field.getType() == Optional.class ? Optional.empty() : null).toArray(Object[]::new);
     }
 
     /**
@@ -109,7 +110,7 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
     @SuppressWarnings("unchecked")
     public BUILDER set(NAMES name, Object value) {
         int i = name.ordinal();
-        values[i] = fields[i].getType() == Optional.class && !(value instanceof Optional) ? Optional.ofNullable(value) : value;
+        values[i] = cache.fields[i].getType() == Optional.class && !(value instanceof Optional) ? Optional.ofNullable(value) : value;
         return (BUILDER) this;
     }
 
@@ -119,9 +120,9 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
      */
     @SuppressWarnings("unchecked")
     public BUILDER set(VALUE source) {
-        for (NAMES i : names) {
+        for (NAMES i : cache.names) {
             try {
-                set(i, fields[i.ordinal()].get(source));
+                set(i, cache.fields[i.ordinal()].get(source));
             } catch (IllegalArgumentException | IllegalAccessException e) {
                 throw new InternalError(e);
             }
@@ -137,10 +138,8 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
     @Override
     public VALUE get() {
         try {
-            Constructor<VALUE> constructor = clazz.getConstructor(Stream.of(fields).map(Field::getType).toArray(Class[]::new));
-            return constructor.newInstance(values);
-        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException
-                | SecurityException e) {
+            return cache.constructor.newInstance(values);
+        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | SecurityException e) {
             throw new RuntimeException(e);
         }
     }
@@ -155,7 +154,7 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
     public String toString() {
         return IntStream.range(0, values.length).mapToObj(i -> {
             Object v = values[i];
-            return names[i] + pairSeparator + (v instanceof Optional ? ((Optional<Object>) v).orElse(empty) : v);
+            return cache.names[i] + pairSeparator + (v instanceof Optional ? ((Optional<Object>) v).orElse(empty) : v);
         }).collect(Collectors.joining(entrySeparator));
     }
 
