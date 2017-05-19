@@ -8,30 +8,77 @@ import java.lang.reflect.Type;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-@SuppressWarnings("javadoc")
+/**
+ * Builder base
+ * 
+ * @param <VALUE> Value type
+ * @param <BUILDER> Builder type
+ * @param <NAMES> Names type
+ */
 public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILDER, NAMES>, NAMES extends Enum<?>> implements Supplier<VALUE> {
 
+    /**
+     * Text in case of "Optional.empty" in "toString"
+     */
     public String empty = "(未設定)";
+    /**
+     * Key-value separator in "toString"
+     */
     public String pairSeparator = ": ";
+    /**
+     * Entry separator in "toString"
+     */
     public String entrySeparator = ", ";
 
+    /**
+     * Target class
+     */
     final Class<VALUE> clazz;
+    /**
+     * Field names
+     */
     final NAMES[] names;
+    /**
+     * Field refrections
+     */
     final Field[] fields;
+    /**
+     * Field values
+     */
     final Object[] values;
 
+    /**
+     * Cache
+     */
     private static final Map<Class<?>, Cache> caches = new ConcurrentHashMap<>();
 
+    /**
+     * Cached items
+     */
     private static class Cache {
+        /**
+         * Target class
+         */
         private Class<?> clazz;
+        /**
+         * Field names
+         */
         private Enum<?>[] names;
+        /**
+         * Field refrections
+         */
         private Field[] fields;
     }
 
+    /**
+     * Constructor
+     */
     @SuppressWarnings("unchecked")
     public AbstractBuilder() {
         Cache cache = caches.computeIfAbsent(getClass(), key -> {
@@ -54,18 +101,27 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
         values = Stream.of(fields).map(field -> field.getType() == Optional.class ? Optional.empty() : null).toArray(Object[]::new);
     }
 
+    /**
+     * @param name Field name
+     * @param value Field value
+     * @return Self
+     */
     @SuppressWarnings("unchecked")
     public BUILDER set(NAMES name, Object value) {
         int i = name.ordinal();
-        values[i] = fields[i].getType() == Optional.class ? Optional.ofNullable(value) : value;
+        values[i] = fields[i].getType() == Optional.class && !(value instanceof Optional) ? Optional.ofNullable(value) : value;
         return (BUILDER) this;
     }
 
+    /**
+     * @param source Source
+     * @return Copied Builder
+     */
     @SuppressWarnings("unchecked")
-    public BUILDER copy(VALUE value) {
+    public BUILDER set(VALUE source) {
         for (NAMES i : names) {
             try {
-                set(i, fields[i.ordinal()].get(value));
+                set(i, fields[i.ordinal()].get(source));
             } catch (IllegalArgumentException | IllegalAccessException e) {
                 throw new InternalError(e);
             }
@@ -73,6 +129,11 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
         return (BUILDER) this;
     }
 
+    /*
+     * (non-Javadoc)
+     * 
+     * @see java.util.function.Supplier#get()
+     */
     @Override
     public VALUE get() {
         try {
@@ -84,15 +145,27 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
         }
     }
 
+    /*
+     * (non-Javadoc)
+     * 
+     * @see java.lang.Object#toString()
+     */
     @SuppressWarnings("unchecked")
-    public String toString(VALUE value) {
-        return Stream.of(fields).map(field -> {
-            try {
-                Object v = field.get(value);
-                return field.getName() + pairSeparator + (v instanceof Optional ? ((Optional<Object>) v).orElse(empty) : v);
-            } catch (IllegalArgumentException | IllegalAccessException e) {
-                throw new RuntimeException(e);
-            }
+    @Override
+    public String toString() {
+        return IntStream.range(0, values.length).mapToObj(i -> {
+            Object v = values[i];
+            return names[i] + pairSeparator + (v instanceof Optional ? ((Optional<Object>) v).orElse(empty) : v);
         }).collect(Collectors.joining(entrySeparator));
+    }
+
+    /**
+     * @param setup Setup
+     * @return Self
+     */
+    @SuppressWarnings("unchecked")
+    public BUILDER setup(Consumer<BUILDER> setup) {
+        setup.accept((BUILDER) this);
+        return (BUILDER) this;
     }
 }

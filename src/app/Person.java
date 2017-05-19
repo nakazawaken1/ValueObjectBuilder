@@ -33,11 +33,11 @@ public class Person {
     }
 
     public static Builder of(Person source) {
-        return new Builder().copy(source);
+        return new Builder().set(source);
     }
 
     @Override
     public String toString() {
-        return new Builder().toString(this);
+        return new Builder().set(this).toString();
     }
 }
