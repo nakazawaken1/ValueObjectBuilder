@@ -1,4 +1,4 @@
-package app;
+package jp.qpg;
 
 import java.time.LocalDate;
 import java.util.Optional;

@@ -1,9 +1,9 @@
-package app;
+package jp.qpg;
 
 import java.time.LocalDate;
 
-import app.Person.Builder.F;
-import app.Person.Gender;
+import jp.qpg.Person.Builder.F;
+import jp.qpg.Person.Gender;
 
 @SuppressWarnings("javadoc")
 public class Example {
