@@ -13,6 +13,6 @@ public class Example {
         Person tanaka = Person.of(yamada).set(F.name, "田中陽子").set(F.gender, Gender.FEMALE).get();
         System.out.println(tanaka);
         System.out.println(yamada);
-        System.out.println(Person.of().set(F.name, "匿名希望").get());
+        System.out.println(Person.of(F.name, "匿名希望").get());
     }
 }

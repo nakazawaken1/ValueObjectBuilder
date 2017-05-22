@@ -36,6 +36,10 @@ public class Person {
         return new Builder().set(source);
     }
 
+    public static Builder of(Builder.F name, Object value, Object... pairs) {
+        return new Builder().set(name, value, pairs);
+    }
+
     @Override
     public String toString() {
         return new Builder().set(this).toString();
