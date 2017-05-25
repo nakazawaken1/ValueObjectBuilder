@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.IntFunction;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -19,9 +21,9 @@ import java.util.stream.Stream;
  * 
  * @param <VALUE> Value type
  * @param <BUILDER> Builder type
- * @param <NAMES> Names type
+ * @param <NAMES> Field names type
  */
-public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILDER, NAMES>, NAMES extends Enum<?>> implements Supplier<VALUE> {
+public abstract class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILDER, NAMES>, NAMES extends Enum<?>> implements Supplier<VALUE> {
 
     /**
      * Text in case of "Optional.empty" in "toString"
@@ -35,6 +37,10 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
      * Entry separator in "toString"
      */
     public String entrySeparator = ", ";
+    /**
+     * Validator
+     */
+    public Runnable validator = null;
 
     /**
      * Meta info
@@ -44,6 +50,10 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
      * Field values
      */
     final Object[] values;
+    /**
+     * Converter
+     */
+    final Function<Object, Object>[] converters;
 
     /**
      * Caches
@@ -106,7 +116,9 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
             }
             return (Meta<?, Enum<?>>) m;
         });
-        values = Stream.of(meta.fields).map(field -> field.getType() == Optional.class ? Optional.empty() : null).toArray(Object[]::new);
+        values = new Object[meta.fields.length];
+        reset();
+        converters = new Function[values.length];
     }
 
     /**
@@ -152,6 +164,55 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
         return (BUILDER) this;
     }
 
+    /**
+     * @param setup Setup
+     * @return Self
+     */
+    @SuppressWarnings("unchecked")
+    public BUILDER setup(Consumer<BUILDER> setup) {
+        setup.accept((BUILDER) this);
+        return (BUILDER) this;
+    }
+
+    /**
+     * @param name Field name
+     * @return Field
+     */
+    public Field getField(NAMES name) {
+        return meta.fields[name.ordinal()];
+    }
+
+    /**
+     * @param name Field name
+     * @return Field value
+     */
+    public Object getValue(NAMES name) {
+        return values[name.ordinal()];
+    }
+
+    /**
+     * Reset values
+     * 
+     * @return Self
+     */
+    @SuppressWarnings("unchecked")
+    public BUILDER reset() {
+        System.arraycopy(Stream.of(meta.fields).map(field -> field.getType() == Optional.class ? Optional.empty() : null).toArray(Object[]::new), 0, values, 0,
+                values.length);
+        return (BUILDER) this;
+    }
+
+    /**
+     * @param name Field name
+     * @param converter Converter
+     * @return Self
+     */
+    @SuppressWarnings("unchecked")
+    public BUILDER converter(NAMES name, Function<Object, Object> converter) {
+        converters[name.ordinal()] = converter;
+        return (BUILDER) this;
+    }
+
     /*
      * (non-Javadoc)
      * 
@@ -160,7 +221,11 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
     @Override
     public VALUE get() {
         try {
-            return meta.constructor.newInstance(values);
+            if (validator != null) {
+                validator.run();
+            }
+            IntFunction<Object> convert = i -> converters[i] == null ? values[i] : converters[i].apply(values[i]);
+            return meta.constructor.newInstance(IntStream.range(0, values.length).mapToObj(convert).toArray());
         } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | SecurityException e) {
             throw new RuntimeException(e);
         }
@@ -178,15 +243,5 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
             Object v = values[i];
             return meta.names[i] + pairSeparator + (v instanceof Optional ? ((Optional<Object>) v).orElse(empty) : v);
         }).collect(Collectors.joining(entrySeparator));
-    }
-
-    /**
-     * @param setup Setup
-     * @return Self
-     */
-    @SuppressWarnings("unchecked")
-    public BUILDER setup(Consumer<BUILDER> setup) {
-        setup.accept((BUILDER) this);
-        return (BUILDER) this;
     }
 }
