@@ -14,7 +14,7 @@ public class Person {
         FEMALE
     };
 
-    public Person(String name, LocalDate birthday, Optional<Gender> gender) {
+    protected Person(String name, LocalDate birthday, Optional<Gender> gender) {
         this.name = name;
         this.birthday = birthday;
         this.gender = gender;
@@ -36,8 +36,8 @@ public class Person {
         return new Builder().set(source);
     }
 
-    public static Builder of(Builder.F name, Object value, Object... pairs) {
-        return new Builder().set(name, value, pairs);
+    public static Builder of(Builder.F name, Object value, Object... nameValues) {
+        return new Builder().set(name, value, nameValues);
     }
 
     @Override

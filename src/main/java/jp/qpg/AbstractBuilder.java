@@ -89,11 +89,18 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
                 try {
                     return m.clazz.getField(i.name());
                 } catch (NoSuchFieldException | SecurityException e) {
-                    throw new InternalError(e);
+                    try {
+                        Field field = m.clazz.getDeclaredField(i.name());
+                        field.setAccessible(true);
+                        return field;
+                    } catch (NoSuchFieldException | SecurityException e2) {
+                        throw new InternalError(e2);
+                    }
                 }
             }).toArray(Field[]::new);
             try {
-                m.constructor = (Constructor<VALUE>) m.clazz.getConstructor(Stream.of(m.fields).map(Field::getType).toArray(Class[]::new));
+                m.constructor = (Constructor<VALUE>) m.clazz.getDeclaredConstructor(Stream.of(m.fields).map(Field::getType).toArray(Class[]::new));
+                m.constructor.setAccessible(true);
             } catch (NoSuchMethodException | SecurityException e) {
                 throw new InternalError(e);
             }
@@ -117,14 +124,14 @@ public class AbstractBuilder<VALUE, BUILDER extends AbstractBuilder<VALUE, BUILD
     /**
      * @param name Field name
      * @param value Field value
-     * @param pairs Name-value pairs
+     * @param nameValues Name-value pairs
      * @return Self
      */
     @SuppressWarnings("unchecked")
-    public BUILDER set(NAMES name, Object value, Object... pairs) {
+    public BUILDER set(NAMES name, Object value, Object... nameValues) {
         set(name, value);
-        for (int i = 0; i + 1 < pairs.length; i += 2) {
-            set((NAMES) pairs[i], pairs[i + 1]);
+        for (int i = 0; i + 1 < nameValues.length; i += 2) {
+            set((NAMES) nameValues[i], nameValues[i + 1]);
         }
         return (BUILDER) this;
     }
