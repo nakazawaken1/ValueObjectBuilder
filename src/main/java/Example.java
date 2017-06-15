@@ -1,9 +1,9 @@
-package jp.qpg;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 
+import jp.qpg.Person;
 import jp.qpg.Person.Builder;
 import jp.qpg.Person.Builder.F;
 import jp.qpg.Person.Gender;
